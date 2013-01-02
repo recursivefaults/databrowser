@@ -9,23 +9,27 @@
   <body>
     <div class="container">
       <div id="header">
-  			<div class="left">
-  				<h1>The SLC Data Browser</h1>
+        <div id="portal">
+          <%= @header.gsub(/\[\$USER_NAME\$\]/, session[:full_name]).html_safe unless @header.nil? || session[:full_name].nil? %>
+        </div>
+        <div class="left">
+          <h1><%=link_to "The SLC Data Browser", :root%></h1>
           <span><i>Navigate your data through the SLC API.</i></span>
-  			</div>
-  			<div class="right">
-  				<h4 style="display:inline;">Hello <%= session[:full_name] %> | <%= link_to 'Home', :root %> | <%= link_to 'Logout', '/logout'  %> </h4>
-  				<div class="search">
+        </div>
+        <div class="right">
+          <% if @header.nil? %>
+            <h4 style="display:inline;">Hello <%= session[:full_name] %> | <%= link_to 'Home', :root %> | <%= link_to 'Logout', '/logout'  %> </h4>
+          <% end %>
+          <div class="search">
             <%= render 'entities/search'%>
-    			</div>
-  			</div>
-  	  </div>
+          </div>
+        </div>
+      </div>
     	<div id="content">
     		<%- flash.each do |key, msg| -%>
-    		  <div id="flash" class="flash-<%= key %>">
-    		    <p style="float:right;"><%= link_to_function 'X', "jQuery('#flash').fadeToggle()" %></p>
-    		    <p><%= msg %></p>
-    		    <div class="clear"></div>
+    		  <div id="alert" class="alert alert-<%= key %>">
+    		    <button type="button" class="close" data-dismiss="alert">×</button>
+    		    <strong><%= msg %></strong>
     		  </div>
     		<%- end -%>
 		
@@ -34,6 +38,7 @@
     	<div id="left-bar">
     	</div>
     	<div id="footer">
+          <%=  raw @footer unless @footer.nil? %>
     	</div>
 	  </div>
 

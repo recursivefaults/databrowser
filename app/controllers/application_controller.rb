@@ -40,17 +40,17 @@ class ApplicationController < ActionController::Base
   rescue_from ActiveResource::UnauthorizedAccess do |exception|
     logger.debug {"401 detected"}
     logger.info { "Unauthorized Access: Redirecting..." }
-    session[:oauth] = nil
+    reset_session
     handle_oauth
   end
   
   rescue_from ActiveResource::ForbiddenAccess do |exception|
     logger.info { "Forbidden access."}
-    flash[:error] = "You do not have access to view this."
+    flash[:error] = "Sorry, you don't have access to this page. If you feel like you are getting this page in error, please contact your administrator."
 
     # If 403 happened during login, we don't have a valid :back, so render 403 page.
     # Otherwise redirect back with the flash set
-    if request.headers['referer'].nil? or !request.headers['referer'].include?(request.host)  
+    if request.headers['referer'].nil? or !request.headers['referer'].include?(request.host)
         return render :status => :forbidden, :layout=> false, :file => "#{Rails.root}/public/403.html"
     end
     redirect_to :back
@@ -77,7 +77,6 @@ class ApplicationController < ActionController::Base
   #
   #From here we bounce you back internally to the page you originally wanted to see.
   def callback
-    #TODO: disable redirects to other domains
     redirect_to session[:entry_url] unless session[:entry_url].include? '/callback'
     return
     if params[:state]
@@ -93,7 +92,7 @@ class ApplicationController < ActionController::Base
   private 
   def not_found
     logger.debug {"Not found"}
-    flash[:alert] = "No resource found with id: #{params[:id]}"
+    flash[:alert] = "No resource found with id: #{params[:id] || params[:search_id]}"
     redirect_to :back
   end
   
@@ -110,6 +109,8 @@ class ApplicationController < ActionController::Base
   #get your name and display it in the header of the databrowser. It represents the
   #first successful call to the Api.
   def handle_oauth
+    @header = nil
+    @footer = nil
     SessionResource.access_token = nil
     oauth = session[:oauth]
     if oauth.nil?
@@ -119,9 +120,22 @@ class ApplicationController < ActionController::Base
     end
     if oauth.enabled?
       if oauth.token != nil
+        begin
+          @header = PortalHeader.get("", :isAdmin => true)
+          @footer = PortalFooter.get("", :isAdmin => true)
+        rescue Exception => e
+          logger.warn {"We couldn't load the portal header and footer #{e.message}"}
+        end
         SessionResource.access_token = oauth.token
         Check.url_type = "check"
-        session[:full_name] ||= Check.get("")["full_name"]    
+        check = Check.get("")
+        session[:full_name] = check["full_name"]
+        session[:is_admin] = check["isAdminUser"]
+        if !session[:is_admin] && !session[:is_admin].nil?
+          logger.warn {"User is not an administrator, they cannot use this application"}
+          render :auth_error_page
+        end
+
       elsif params[:code] && !oauth.has_code
         SessionResource.access_token = oauth.get_token(params[:code])
       else

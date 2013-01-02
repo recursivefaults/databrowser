@@ -29,15 +29,6 @@ require "active_resource/base"
 class EntitiesController < ApplicationController
   before_filter :set_url
 
-  rescue_from ActiveResource::ForbiddenAccess do |exception|
-    flash[:notice] = "No accessible entries found."
-    if !request.headers['referer'].nil? and !request.headers['referer'].include?(request.host)  
-      redirect_to :back
-    else
-      raise exception
-    end
-  end
-
   # What we see mostly here is that we are looking for searh parameters.
   # Now, we also try to simply set up the search field and then remove it
   # from the parameters so that we don't confuse the API by passing it
@@ -49,8 +40,6 @@ class EntitiesController < ApplicationController
   def set_url
     @search_field = nil
     case params[:search_type]
-    when /teachers/
-      @search_field = "teacherUniqueStateId"
     when /students/
       @search_field = "studentUniqueStateId"
     when /staff/
@@ -87,24 +76,22 @@ class EntitiesController < ApplicationController
   def show
     @@LIMIT = 50
     @page = Page.new
+
     if params[:search_id] && @search_field
       @entities = Entity.get("", @search_field => params[:search_id]) if params[:search_id]
-      flash.now[:notice] = "There were no entries matching your search" if @entities.size == 0 || @entities.nil?  
-      return
+      clean_up_results
+      flash.now[:notice] = "There were no entries matching your search" if @entities.size == 0 || @entities.nil?
     else
+      #Clean up the parameters to pass through to the API.
       if params[:offset]
-        @entities = Entity.get("", {:offset => params[:offset], :limit => @@LIMIT})
-      else
-        @entities = Entity.get("")
+        params[:limit] == @@LIMIT
       end
+      query = params.reject {|k, v| k == 'controller' || k == 'action' || k == 'other' || k == 'search_id'}
+      logger.debug {"Keeping query parameters #{query.inspect}"}
+      @entities = Entity.get("", query)
       @page = Page.new(@entities.http_response)
+      clean_up_results
     end
-    if @entities.is_a?(Hash)
-      tmp = Array.new()
-      tmp.push(@entities)
-      @entities = tmp
-    end
-
     if params[:other] == 'home'
       render :index
       return
@@ -114,6 +101,15 @@ class EntitiesController < ApplicationController
       format.html # show.html.erb
       format.json { render json: @entities }
       format.js #show.js.erb
+    end
+  end
+  
+  private
+  def clean_up_results
+    if @entities.is_a?(Hash)
+      tmp = Array.new()
+      tmp.push(@entities)
+      @entities = tmp
     end
   end
 end
